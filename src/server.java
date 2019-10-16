@@ -1,5 +1,6 @@
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -10,17 +11,20 @@ import java.net.InetAddress;
 public class server {
 	
 	private static final int MAXBUFFERLEN = 3000;
+	private static StringBuilder writingBuffer;
 	
 	public static void main(String args[]) throws ClassNotFoundException, IOException {
 		
 		int serverPort = Integer.parseInt(args[0]);
 		String clientName = args[1];
 		int clientPort = Integer.parseInt(args[2]);
+		String fileName = args[3];
+		
+		writingBuffer = new StringBuilder("");
 		
 		DatagramSocket serverSocket = new DatagramSocket(serverPort);
 		
-		packet data = new packet(4,3,2,"1");
-		talkOn(serverSocket,clientName,clientPort,data);
+		talkOn(serverSocket,clientName,clientPort,fileName);
 		
 		serverSocket.close();
 		
@@ -51,20 +55,47 @@ public class server {
 		return toReturn;
 	}
 	
-	private static void talkOn(DatagramSocket serverSocket, String clientName, int clientPort, packet data) throws IOException, ClassNotFoundException {
-		byte[] dataToDeserialize = new byte[MAXBUFFERLEN];
-		DatagramPacket packetToReceive = new DatagramPacket(dataToDeserialize,dataToDeserialize.length);
+	private static void talkOn(DatagramSocket serverSocket, String clientName, int clientPort, String fileName) throws IOException, ClassNotFoundException {
 		
-		serverSocket.receive(packetToReceive);
+		while(true)
+		{
+			byte[] dataToDeserialize = new byte[MAXBUFFERLEN];
+			DatagramPacket packetToReceive = new DatagramPacket(dataToDeserialize,dataToDeserialize.length);
+			
+			serverSocket.receive(packetToReceive);
+			
+			packet dataReceived = deserializePacket(dataToDeserialize);
+			dataReceived.printContents();
+			
+			packet dataToSend;
+			if(dataReceived.getType()!=3)
+			{
+				writingBuffer.append(dataReceived.getData());
+				dataToSend = new packet(0,dataReceived.getSeqNum(),0,null);
+			}else
+			{
+				dataToSend = new packet(2,dataReceived.getSeqNum(),0,null);
+				byte[] serializedData = serializePacket(dataToSend);
+				
+				DatagramPacket packetToSend = new DatagramPacket(serializedData,serializedData.length,InetAddress.getByName(clientName),clientPort);
+				serverSocket.send(packetToSend);
+				writeToFile(fileName);
+				return;
+			}
+			byte[] serializedData = serializePacket(dataToSend);
+			
+			DatagramPacket packetToSend = new DatagramPacket(serializedData,serializedData.length,InetAddress.getByName(clientName),clientPort);
+			serverSocket.send(packetToSend);
+			
+		}
 		
-		packet dataReceived = deserializePacket(dataToDeserialize);
-		dataReceived.printContents();
+	}
+
+	private static void writeToFile(String fileName) throws IOException {
+		FileWriter fw = new FileWriter(fileName,false);//can also buffer the output to the writing buffer so that all of the file is not held in the memory
+		fw.write(writingBuffer.toString());
+		fw.close();
 		
-		packet dataToSend = data;
-		byte[] serializedData = serializePacket(dataToSend);
-		
-		DatagramPacket packetToSend = new DatagramPacket(serializedData,serializedData.length,InetAddress.getByName(clientName),clientPort);
-		serverSocket.send(packetToSend);
 	}
 	
 }

@@ -6,22 +6,26 @@ import java.io.ObjectOutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 public class client {
 	
 	private static final int MAXBUFFERLEN = 3000;
+	private static final int MAXREADSIZE = 30;
+	private static final int EXTRAPACKETS = 0;
 	
 	public static void main(String[] args) throws IOException, ClassNotFoundException {
 		
 		int clientPort = Integer.parseInt(args[0]);
 		String serverName = args[1];
 		int serverPort = Integer.parseInt(args[2]);
+		String fileName = args[3];
 		
 		DatagramSocket clientSocket = new DatagramSocket(clientPort);
 		
-		packet data = new packet(1,2,3,"4");
-		
-		talkOn(clientSocket,serverName,serverPort,data);
+		talkOn(clientSocket,serverName,serverPort,fileName);
 		
 		clientSocket.close();
 	}
@@ -51,19 +55,85 @@ public class client {
 		return toReturn;
 	}
 	
-	private static void talkOn(DatagramSocket clientSocket, String serverName, int serverPort, packet data) throws IOException, ClassNotFoundException {
-		byte[] serializedData = serializePacket(data);
+	private static byte[][] serializePacketizedFile(String fileName) throws IOException
+	{
+		packet[] packets = packetizeFile(fileName);
+		byte[][] toReturn = new byte[packets.length][];
 		
-		DatagramPacket packetToSend = new DatagramPacket(serializedData,serializedData.length, InetAddress.getByName(serverName),serverPort);
+		for(int i=0;i<packets.length;i++)
+		{
+			toReturn[i] = serializePacket(packets[i]);
+		}
+		
+		return toReturn;
+	}
+	
+	private static packet[] packetizeFile(String fileName) throws IOException{
+		
+		String fileContent = readFile(fileName);//can also read file in chunks of 30 characters if the file is too big
+		packet[] packets = new packet[fileContent.length()/MAXREADSIZE + 1 + EXTRAPACKETS];
+		int ind=0;
+		packets[ind] = new packet(1,0,0,null);
+		for(int i=0;i<fileContent.length();i+=MAXREADSIZE)
+		{
+			ind = i/MAXREADSIZE;
+			try
+			{
+				packets[ind] = new packet(1,ind%7,MAXREADSIZE,fileContent.substring(i, i+MAXREADSIZE));
+			}catch(IndexOutOfBoundsException e)
+			{
+				packets[ind] = new packet(1,ind%7,fileContent.length()-i, fileContent.substring(i, fileContent.length()));
+				break;
+			}
+		}
+		/*ind += 1;
+		
+		packets[ind] = new packet(3,ind%7,0,null);*/
+		
+		return packets;
+	}
+	
+	private static String readFile(String fileName) throws IOException {
+		String content = new String(Files.readAllBytes(Paths.get(fileName)),StandardCharsets.US_ASCII);
+		return content;
+	}
+
+	private static void talkOn(DatagramSocket clientSocket, String serverName, int serverPort, String fileName) throws IOException, ClassNotFoundException {
+		//byte[] serializedData = serializePacket(data);
+		
+		byte[][] serializedPackets = serializePacketizedFile(fileName);
+		byte[] dataToDeserialize;
+		
+		DatagramPacket packetToSend;
+		DatagramPacket packetToReceive;
+		packet ack;
+		InetAddress host = InetAddress.getByName(serverName);
+		for(byte[] serializedData: serializedPackets)
+		{
+			packetToSend = new DatagramPacket(serializedData,serializedData.length,host,serverPort);
+			clientSocket.send(packetToSend);
+			
+			dataToDeserialize = new byte[MAXBUFFERLEN];
+			
+			packetToReceive = new DatagramPacket(dataToDeserialize,dataToDeserialize.length);
+			clientSocket.receive(packetToReceive);
+			
+			ack = deserializePacket(dataToDeserialize);
+			
+			ack.printContents();
+		}
+		//GBN 
+		System.out.println("sent everything. now sending EOT");
+		byte[] EOTSerialized = serializePacket(new packet(3,(serializedPackets.length+1)%7,0,null));
+		packetToSend = new DatagramPacket(EOTSerialized,EOTSerialized.length,host,serverPort);
 		clientSocket.send(packetToSend);
 		
-		byte[] dataToDeserialize = new byte[MAXBUFFERLEN];
-		
-		DatagramPacket packetToReceive = new DatagramPacket(dataToDeserialize,dataToDeserialize.length);
+		dataToDeserialize = new byte[MAXBUFFERLEN];
+		packetToReceive = new DatagramPacket(dataToDeserialize,dataToDeserialize.length);
 		clientSocket.receive(packetToReceive);
-		
-		packet ack = deserializePacket(dataToDeserialize);
+		ack = deserializePacket(dataToDeserialize);
 		
 		ack.printContents();
+		
 	}
 }
