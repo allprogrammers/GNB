@@ -15,16 +15,16 @@ public class server {
 	
 	public static void main(String args[]) throws ClassNotFoundException, IOException {
 		
-		int serverPort = Integer.parseInt(args[0]);
-		String clientName = args[1];
-		int clientPort = Integer.parseInt(args[2]);
+		String emulatorName = args[0];
+		int serverPort = Integer.parseInt(args[1]);
+		int emulatorPort = Integer.parseInt(args[2]);
 		String fileName = args[3];
 		
 		writingBuffer = new StringBuilder("");
 		
 		DatagramSocket serverSocket = new DatagramSocket(serverPort);
 		
-		talkOn(serverSocket,clientName,clientPort,fileName);
+		talkOn(serverSocket,emulatorName,emulatorPort,fileName);
 		
 		serverSocket.close();
 		

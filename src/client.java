@@ -15,17 +15,18 @@ public class client {
 	private static final int MAXBUFFERLEN = 3000;
 	private static final int MAXREADSIZE = 30;
 	private static final int EXTRAPACKETS = 0;
+	private static final int WINDOWSIZE = 7;
 	
 	public static void main(String[] args) throws IOException, ClassNotFoundException {
 		
-		int clientPort = Integer.parseInt(args[0]);
-		String serverName = args[1];
-		int serverPort = Integer.parseInt(args[2]);
+		String emulatorName = args[0];
+		int emulatorPort = Integer.parseInt(args[1]);
+		int clientPort = Integer.parseInt(args[2]);
 		String fileName = args[3];
 		
 		DatagramSocket clientSocket = new DatagramSocket(clientPort);
 		
-		talkOn(clientSocket,serverName,serverPort,fileName);
+		talkOn(clientSocket,emulatorName,emulatorPort,fileName);
 		
 		clientSocket.close();
 	}
@@ -108,8 +109,9 @@ public class client {
 		DatagramPacket packetToReceive;
 		packet ack;
 		InetAddress host = InetAddress.getByName(serverName);
-		for(byte[] serializedData: serializedPackets)
+		for(int i=0;i<serializedPackets.length;i+=7)
 		{
+			byte[] serializedData = serializedPackets[i];
 			packetToSend = new DatagramPacket(serializedData,serializedData.length,host,serverPort);
 			clientSocket.send(packetToSend);
 			
