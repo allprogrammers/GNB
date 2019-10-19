@@ -12,6 +12,7 @@ public class server {
 	
 	private static final int MAXBUFFERLEN = 3000;
 	private static StringBuilder writingBuffer;
+	private static final int WINDOWSIZE = 7;
 	
 	public static void main(String args[]) throws ClassNotFoundException, IOException {
 		
@@ -57,6 +58,8 @@ public class server {
 	
 	private static void talkOn(DatagramSocket serverSocket, String clientName, int clientPort, String fileName) throws IOException, ClassNotFoundException {
 		
+		int expectedSeq = 0;
+		int lastAcked = WINDOWSIZE;
 		while(true)
 		{
 			byte[] dataToDeserialize = new byte[MAXBUFFERLEN];
@@ -65,22 +68,33 @@ public class server {
 			serverSocket.receive(packetToReceive);
 			
 			packet dataReceived = deserializePacket(dataToDeserialize);
-			dataReceived.printContents();
 			
 			packet dataToSend;
-			if(dataReceived.getType()!=3)
+			
+			if(dataReceived.getSeqNum()==expectedSeq)
 			{
-				writingBuffer.append(dataReceived.getData());
-				dataToSend = new packet(0,dataReceived.getSeqNum(),0,null);
-			}else
-			{
-				dataToSend = new packet(2,dataReceived.getSeqNum(),0,null);
-				byte[] serializedData = serializePacket(dataToSend);
 				
-				DatagramPacket packetToSend = new DatagramPacket(serializedData,serializedData.length,InetAddress.getByName(clientName),clientPort);
-				serverSocket.send(packetToSend);
-				writeToFile(fileName);
-				return;
+				if(dataReceived.getType()==3)
+				{
+					dataToSend = new packet(2,dataReceived.getSeqNum(),0,null);
+					byte[] serializedData = serializePacket(dataToSend);
+					
+					DatagramPacket packetToSend = new DatagramPacket(serializedData,serializedData.length,InetAddress.getByName(clientName),clientPort);
+					serverSocket.send(packetToSend);
+					break;
+				}else
+				{
+					lastAcked = dataReceived.getSeqNum()==WINDOWSIZE-1?WINDOWSIZE:dataReceived.getSeqNum();
+					writingBuffer.append(dataReceived.getData());
+					//dataReceived.printContents();
+					dataToSend = new packet(0,lastAcked,0,null);
+					dataToSend.printContents();
+					expectedSeq = (expectedSeq+1)%(WINDOWSIZE);
+				}
+			}else {
+				dataToSend = new packet(0,lastAcked,0,null);
+				dataToSend.printContents();
+				System.out.println("is what i am acking and expected was "+expectedSeq+" but I got " + dataReceived.getSeqNum());
 			}
 			byte[] serializedData = serializePacket(dataToSend);
 			
@@ -88,6 +102,7 @@ public class server {
 			serverSocket.send(packetToSend);
 			
 		}
+		writeToFile(fileName);
 		
 	}
 
