@@ -82,12 +82,13 @@ public class client {
 			ind = i/MAXREADSIZE;
 			try
 			{
-				packets[ind] = new packet(1,ind%(WINDOWSIZE),MAXREADSIZE,fileContent.substring(i, i+MAXREADSIZE));
+				packets[ind] = new packet(1,ind%(WINDOWSIZE+1),MAXREADSIZE,fileContent.substring(i, i+MAXREADSIZE));
 			}catch(IndexOutOfBoundsException e)
 			{
-				packets[ind] = new packet(1,ind%(WINDOWSIZE),fileContent.length()-i, fileContent.substring(i, fileContent.length()));
+				packets[ind] = new packet(1,ind%(WINDOWSIZE+1),fileContent.length()-i, fileContent.substring(i, fileContent.length()));
 				break;
 			}
+			System.out.println(packets[ind].getData());
 		}
 		/*ind += 1;
 		
@@ -157,8 +158,6 @@ public class client {
 				DatagramPacket item = new DatagramPacket(serializedPackets[base+s+i],serializedPackets[base+s+i].length,serverName,serverPort);
 				window.push(item);
 				clientSocket.send(item);
-				System.out.println("loading "+(base+s+i)%WINDOWSIZE);
-				deserializePacket(item.getData()).printContents();
 			}catch(IndexOutOfBoundsException e)
 			{
 				break;
@@ -172,51 +171,44 @@ public class client {
 		
 		LinkedList<DatagramPacket> window = new LinkedList<DatagramPacket>();
 		int base = 0;
-		int lastAcked = WINDOWSIZE;
+		int nextSeq = WINDOWSIZE;
 		
 		while(base<serializedPackets.length)
 		{
 			loadWindow(clientSocket,window,serverName,serverPort,serializedPackets,base);
 			
-			byte[] dtds = new byte[MAXBUFFERLEN];
-			DatagramPacket ptr = new DatagramPacket(dtds,dtds.length);
-			clientSocket.setSoTimeout(100);
+			byte[] dataReceived = new byte[MAXBUFFERLEN];
+			DatagramPacket ackPack = new DatagramPacket(dataReceived,dataReceived.length);
+			clientSocket.setSoTimeout(50);
 			try
 			{
-				clientSocket.receive(ptr);
+				clientSocket.receive(ackPack);
+				packet ack = deserializePacket(dataReceived);
+				
+				int ackno = ack.getSeqNum();
+				if(ackno==nextSeq)
+					continue;
+					
+				nextSeq = ackno;
+				while(base%(WINDOWSIZE+1)!=ackno)
+				{
+					base +=1;
+					window.removeLast();
+				}
+				base +=1;
+				window.removeLast();
+				
 			}catch(SocketTimeoutException e)
 			{
 				for(DatagramPacket item: window)
-				{
 					clientSocket.send(item);
-				}
-				continue;
 			}
+			System.out.println(base+" "+serializedPackets.length);
 			
-			packet ack = deserializePacket(dtds);
-			
-			if(ack.getType()==0)
-			{
-				System.out.println("got an ack with seqno " + ack.getSeqNum());
-				if(ack.getSeqNum()==WINDOWSIZE)
-					continue;
-				if(ack.getSeqNum()!=lastAcked)
-				{
-					lastAcked = ack.getSeqNum();
-					while(base%(WINDOWSIZE)!=ack.getSeqNum())
-					{
-						System.out.println("kicked");
-						deserializePacket(window.removeLast().getData()).printContents();
-						base+=1;
-					}
-					window.removeLast();
-					base+=1;
-					
-				}
-			}
 		}
+		
 		System.out.println("sent everything. now sending EOT " + serializedPackets.length);
-		byte[] EOTSerialized = serializePacket(new packet(3,(serializedPackets.length)%WINDOWSIZE,0,null));
+		byte[] EOTSerialized = serializePacket(new packet(3,(serializedPackets.length)%(WINDOWSIZE+1),0,null));
 		DatagramPacket packetToSend = new DatagramPacket(EOTSerialized,EOTSerialized.length,serverName,serverPort);
 		clientSocket.send(packetToSend);
 		

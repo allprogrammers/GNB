@@ -59,7 +59,11 @@ public class server {
 	private static void talkOn(DatagramSocket serverSocket, String clientName, int clientPort, String fileName) throws IOException, ClassNotFoundException {
 		
 		int expectedSeq = 0;
-		int lastAcked = WINDOWSIZE;
+		int toAck = WINDOWSIZE;
+		
+		packet dataToSend;
+		packet dataReceived;
+		
 		while(true)
 		{
 			byte[] dataToDeserialize = new byte[MAXBUFFERLEN];
@@ -67,41 +71,35 @@ public class server {
 			
 			serverSocket.receive(packetToReceive);
 			
-			packet dataReceived = deserializePacket(dataToDeserialize);
-			
-			packet dataToSend;
-			
+			dataReceived = deserializePacket(dataToDeserialize);
+			System.out.println(dataReceived.getSeqNum()+" "+expectedSeq); 
 			if(dataReceived.getSeqNum()==expectedSeq)
 			{
-				
+				toAck = expectedSeq;
+				expectedSeq = (expectedSeq+1)%(WINDOWSIZE+1);
 				if(dataReceived.getType()==3)
 				{
-					dataToSend = new packet(2,dataReceived.getSeqNum(),0,null);
-					byte[] serializedData = serializePacket(dataToSend);
-					
-					DatagramPacket packetToSend = new DatagramPacket(serializedData,serializedData.length,InetAddress.getByName(clientName),clientPort);
-					serverSocket.send(packetToSend);
+					System.out.println("done");
 					break;
 				}else
 				{
-					lastAcked = dataReceived.getSeqNum()==WINDOWSIZE-1?WINDOWSIZE:dataReceived.getSeqNum();
 					writingBuffer.append(dataReceived.getData());
 					//dataReceived.printContents();
-					dataToSend = new packet(0,lastAcked,0,null);
-					dataToSend.printContents();
-					expectedSeq = (expectedSeq+1)%(WINDOWSIZE);
 				}
-			}else {
-				dataToSend = new packet(0,lastAcked,0,null);
-				dataToSend.printContents();
-				System.out.println("is what i am acking and expected was "+expectedSeq+" but I got " + dataReceived.getSeqNum());
 			}
+
+			dataToSend = new packet(0,toAck,0,null);
 			byte[] serializedData = serializePacket(dataToSend);
 			
 			DatagramPacket packetToSend = new DatagramPacket(serializedData,serializedData.length,InetAddress.getByName(clientName),clientPort);
 			serverSocket.send(packetToSend);
 			
 		}
+		dataToSend = new packet(2,dataReceived.getSeqNum(),0,null);
+		byte[] serializedData = serializePacket(dataToSend);
+		
+		DatagramPacket packetToSend = new DatagramPacket(serializedData,serializedData.length,InetAddress.getByName(clientName),clientPort);
+		serverSocket.send(packetToSend);
 		writeToFile(fileName);
 		
 	}
