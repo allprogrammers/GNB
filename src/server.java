@@ -11,7 +11,7 @@ import java.net.InetAddress;
 public class server {
 	
 	private static final int MAXBUFFERLEN = 3000;
-	private static StringBuilder writingBuffer;
+	private static StringBuilder downloadedContent = new StringBuilder();
 	private static final int WINDOWSIZE = 7;
 	
 	public static void main(String args[]) throws ClassNotFoundException, IOException {
@@ -20,8 +20,6 @@ public class server {
 		int serverPort = Integer.parseInt(args[1]);
 		int emulatorPort = Integer.parseInt(args[2]);
 		String fileName = args[3];
-		
-		writingBuffer = new StringBuilder("");
 		
 		DatagramSocket serverSocket = new DatagramSocket(serverPort);
 		
@@ -83,7 +81,7 @@ public class server {
 					break;
 				}else
 				{
-					writingBuffer.append(dataReceived.getData());
+					downloadedContent.append(dataReceived.getData());
 					//dataReceived.printContents();
 				}
 			}
@@ -100,15 +98,14 @@ public class server {
 		
 		DatagramPacket packetToSend = new DatagramPacket(serializedData,serializedData.length,InetAddress.getByName(clientName),clientPort);
 		serverSocket.send(packetToSend);
-		writeToFile(fileName);
+		writeFile(fileName,downloadedContent.toString());
 		
 	}
 
-	private static void writeToFile(String fileName) throws IOException {
-		FileWriter fw = new FileWriter(fileName,false);//can also buffer the output to the writing buffer so that all of the file is not held in the memory
-		fw.write(writingBuffer.toString());
+	private static void writeFile(String filename,String filecontent) throws IOException {
+		FileWriter fw = new FileWriter(filename,false);//can also buffer the output to the writing buffer so that all of the file is not held in the memory
+		fw.write(filecontent);
 		fw.close();
-		
 	}
 	
 }
