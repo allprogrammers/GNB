@@ -72,9 +72,9 @@ public class client {
 		return toReturn;
 	}
 	
-	private static byte[][] serializePacketizedFile(String fileName,int maxReadSize,int extraPackets,int windowsize) throws IOException
+	private static byte[][] serializePacketizedFile(String fileName) throws IOException
 	{
-		packet[] packets = packetizeFile(fileName,maxReadSize,extraPackets,windowsize);
+		packet[] packets = packetizeFile(fileName);
 		byte[][] toReturn = new byte[packets.length][];
 		
 		for(int i=0;i<packets.length;i++)
@@ -85,10 +85,10 @@ public class client {
 		return toReturn;
 	}
 	
-	private static packet[] packetizeFile(String fileName,int maxReadSize,int extraPackets,int windowsize) throws IOException{
+	private static packet[] packetizeFile(String fileName) throws IOException{
 		
 		String fileContent = readFile(fileName);//can also read file in chunks of 30 characters if the file is too big
-		packet[] packets = new packet[fileContent.length()/maxReadSize + 1 + extraPackets];
+		packet[] packets = new packet[fileContent.length()/MAXREADSIZE + 1 + EXTRAPACKETS];
 		int ind=0;
 		packets[ind] = new packet(1,0,0,null);
 		for(int i=0;i<fileContent.length();i+=MAXREADSIZE)
