@@ -146,8 +146,6 @@ public class client {
 				
 			}catch(SocketTimeoutException e)//resends the window on timeout
 			{
-				seqlogbuff.append("timeout here \n");
-				System.out.println("windowsize is"+ window.size());
 				for(int i=0;i<window.size();i++)
 				{
 					DatagramPacket item = window.get(i);
