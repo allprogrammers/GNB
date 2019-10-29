@@ -1,3 +1,10 @@
+/*
+ * Muhammad Hamza Ali
+ * ma1973
+ * Programming Assignment 2 server.java
+ * 
+ * help taken from lecture slides
+ */
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -12,6 +19,10 @@ public class server {
 	private static StringBuilder downloadedContent = new StringBuilder();
 	private static StringBuilder arrivallog = new StringBuilder();
 	
+	/*
+	 * deals with arguments
+	 * creates and talks on the socket using gbn specified by the arguments
+	 */
 	public static void main(String args[]) throws ClassNotFoundException, IOException {
 		
 		String emulatorName = args[0];
@@ -27,6 +38,9 @@ public class server {
 		
 	}
 	
+	/*
+	 * talks to the client on the socket specifies by the arguments using gbn
+	 */
 	private static void talkOn(DatagramSocket serverSocket, String clientName, int clientPort, String fileName) throws IOException, ClassNotFoundException {
 		
 		int expectedSeq = 0;
@@ -35,20 +49,23 @@ public class server {
 		packet dataToSend;
 		packet dataReceived;
 		
+		//waits for a packet and if the packet was with an expected sequence number deals with the data
 		while(true)
 		{
-			System.out.println(expectedSeq);
 			byte[] dataToDeserialize = new byte[MAXBUFFERLEN];
 			DatagramPacket packetToReceive = new DatagramPacket(dataToDeserialize,dataToDeserialize.length);
-			
+
 			serverSocket.receive(packetToReceive);
 			
 			dataReceived = commons.deserializePacket(dataToDeserialize);
 			arrivallog.append(dataReceived.getSeqNum()+"\n");
+			
+			
 			if(dataReceived.getSeqNum()==expectedSeq)
 			{
 				toAck = expectedSeq;
 				expectedSeq = (expectedSeq+1)%(WINDOWSIZE+1);
+				//deals with EOT packet
 				if(dataReceived.getType()==3)
 				{
 					break;
@@ -56,9 +73,6 @@ public class server {
 				{
 					downloadedContent.append(dataReceived.getData());
 				}
-			}else
-			{
-				System.out.println("weird "+expectedSeq+" "+ dataReceived.getSeqNum());
 			}
 
 			dataToSend = new packet(0,toAck,0,null);
@@ -68,11 +82,15 @@ public class server {
 			serverSocket.send(packetToSend);
 			
 		}
+		
+		//by coming here it has received an EOT packet so it prepares and sends a return EOT to the client
 		dataToSend = new packet(2,dataReceived.getSeqNum(),0,null);
 		byte[] serializedData = commons.serializePacket(dataToSend);
 		
 		DatagramPacket packetToSend = new DatagramPacket(serializedData,serializedData.length,InetAddress.getByName(clientName),clientPort);
 		serverSocket.send(packetToSend);
+
+		//writes the downloaded file and the arrival log file
 		commons.writeFile(fileName,downloadedContent.toString());
 		commons.writeFile(arrivallogfile, arrivallog.toString());
 		

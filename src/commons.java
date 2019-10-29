@@ -1,3 +1,12 @@
+/*
+ * Muhammad Hamza Ali
+ * ma1973
+ * Programming Assignment 2 commons.java
+ * 
+ * pretty self explanatory
+ * 
+ * help taken from JAVA docs
+ */
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FileWriter;
@@ -44,9 +53,9 @@ public class commons {
 		return toReturn;
 	}
 	
-	public static byte[][] serializePacketizedFile(String fileName, int maxreadsize,int extrapackets,int windowsize) throws IOException
+	public static byte[][] serializePacketizedFile(String fileName, int maxreadsize,int windowsize) throws IOException
 	{
-		packet[] packets = packetizeFile(fileName,maxreadsize,extrapackets,windowsize);
+		packet[] packets = packetizeFile(fileName,maxreadsize,windowsize);
 		byte[][] toReturn = new byte[packets.length][];
 		
 		for(int i=0;i<packets.length;i++)
@@ -57,10 +66,10 @@ public class commons {
 		return toReturn;
 	}
 	
-	public static packet[] packetizeFile(String fileName, int maxreadsize,int extrapackets,int windowsize) throws IOException{
+	public static packet[] packetizeFile(String fileName, int maxreadsize,int windowsize) throws IOException{
 		
 		String fileContent = readFile(fileName);//can also read file in chunks of 30 characters if the file is too big
-		packet[] packets = new packet[fileContent.length()/maxreadsize + 1 + extrapackets];
+		packet[] packets = new packet[(int)((fileContent.length()*1.0)/maxreadsize + 0.5)];
 		int ind=0;
 		packets[ind] = new packet(1,0,0,null);
 		for(int i=0;i<fileContent.length();i+=maxreadsize)
@@ -84,7 +93,7 @@ public class commons {
 		return content;
 	}
 	
-	public static void sendAndLog(DatagramSocket clientSocket,DatagramPacket item,StringBuilder seqlogbuff,int seqno) throws IOException
+	public static void sendAndLog(DatagramSocket clientSocket,DatagramPacket item,StringBuilder seqlogbuff,int seqno) throws IOException, ClassNotFoundException
 	{
 		clientSocket.send(item);
 		seqlogbuff.append(seqno + "\n");

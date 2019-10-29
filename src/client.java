@@ -1,3 +1,11 @@
+/*
+ * Muhammad Hamza Ali
+ * ma1973
+ * Programming Assignment 2 client.java
+ * 
+ * help taken from lecture slides.
+ */
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -9,15 +17,17 @@ public class client {
 	
 	private static final int MAXBUFFERLEN = 3000;
 	private static final int MAXREADSIZE = 30;
-	private static final int EXTRAPACKETS = 0;
 	private static final int WINDOWSIZE = 7;
-	private static final int TIMER = 500;
+	private static final int TIMER = 2000;// 2 seconds
 	private static final String seqlog = "clientseqnum.log";
 	private static final String acklog = "clientack.log";
 	
 	private static StringBuilder seqlogbuff= new StringBuilder();
 	private static StringBuilder acklogbuff = new StringBuilder();
 	
+	/*
+	 * deals with the arguments creates socket and communicates using gbn on the socket
+	 */
 	public static void main(String[] args) throws IOException, ClassNotFoundException {
 		
 		String emulatorName = args[0];
@@ -31,15 +41,23 @@ public class client {
 		
 		clientSocket.close();
 	}
-
+	
+	/*
+	 * takes the input file and creates packets
+	 * serializes those packets
+	 * transfers those packets using gbn to ther server
+	 */
 	private static void talkOn(DatagramSocket clientSocket, String serverName, int serverPort, String fileName) throws IOException, ClassNotFoundException {
 		
-		byte[][] serializedPackets = commons.serializePacketizedFile(fileName,MAXREADSIZE,EXTRAPACKETS,WINDOWSIZE);
+		byte[][] serializedPackets = commons.serializePacketizedFile(fileName,MAXREADSIZE,WINDOWSIZE);
 		InetAddress serverHost = InetAddress.getByName(serverName);
 		
 		gbnTransfer(serializedPackets,clientSocket,serverHost,serverPort);
 	}
-
+	
+	/*
+	 * fills up the window with more packets and send them if there are more packets available and there is space in the window otherwise does nothing
+	 */
 	private static void loadWindow(DatagramSocket clientSocket, LinkedList<DatagramPacket> window,InetAddress serverName, int serverPort, byte[][] serializedPackets, int base) throws IOException, ClassNotFoundException {
 		
 		int n = WINDOWSIZE-window.size();
@@ -60,22 +78,34 @@ public class client {
 		
 	}
 	
+	/*
+	 * implements the gbn protocol
+	 */
 	private static void gbnTransfer(byte[][] serializedPackets, DatagramSocket clientSocket, InetAddress serverName, int serverPort) throws IOException, ClassNotFoundException {
 		
 		LinkedList<DatagramPacket> window = new LinkedList<DatagramPacket>();
 		int base = 0;
 		int nextSeq = WINDOWSIZE;
+		long timeStarted=System.currentTimeMillis();
+		int remainingTime = 0;
 		
 		while(base<serializedPackets.length)
 		{
+			//while there are more packets it keeps window full
 			loadWindow(clientSocket,window,serverName,serverPort,serializedPackets,base);
 			
 			byte[] dataReceived = new byte[MAXBUFFERLEN];
 			DatagramPacket ackPack = new DatagramPacket(dataReceived,dataReceived.length);
 			
 			clientSocket.setSoTimeout(TIMER);
-			long timeStarted = System.currentTimeMillis();
 			
+			//(re)starts the timer
+			if(remainingTime<=0)
+			{
+				timeStarted = System.currentTimeMillis();
+			}
+			
+			//tries to get an ack before the timeout
 			try
 			{
 				packet ack;
@@ -88,27 +118,36 @@ public class client {
 					ack = commons.deserializePacket(dataReceived);
 					ackno = ack.getSeqNum();
 					acklogbuff.append(ackno + "\n");
+					
+					//if duplicate ack prevents timer from being changed
 					if(ackno==nextSeq)
 					{
-						int temp = TIMER-(int)(System.currentTimeMillis()-timeStarted);
-						clientSocket.setSoTimeout(temp>0?temp:0);
+						remainingTime = TIMER-(int)(System.currentTimeMillis()-timeStarted);
+						
+						//timeout management
+						if(remainingTime<=0)
+							throw new SocketTimeoutException();
+						else
+							clientSocket.setSoTimeout(remainingTime); 
 						continue;
 					}
 					break;
 				}
-					
+				
+				//updates the base if ack is not duplicate
 				nextSeq = ackno;
 				while(base%(WINDOWSIZE+1)!=ackno)
 				{
 					base +=1;
-					window.removeLast();
+					window.removeFirst();
 				}
 				base +=1;
-				window.removeLast();
+				window.removeFirst();
 				
-			}catch(SocketTimeoutException e)
+			}catch(SocketTimeoutException e)//resends the window on timeout
 			{
 				seqlogbuff.append("timeout here \n");
+				System.out.println("windowsize is"+ window.size());
 				for(int i=0;i<window.size();i++)
 				{
 					DatagramPacket item = window.get(i);
@@ -118,6 +157,8 @@ public class client {
 			
 		}
 		
+		//creates and sends the final EOT packet
+		//waits for the EOT from the server
 		int last = base%(WINDOWSIZE+1);
 		byte[] EOTSerialized = commons.serializePacket(new packet(3,last,0,null));
 		DatagramPacket packetToSend = new DatagramPacket(EOTSerialized,EOTSerialized.length,serverName,serverPort);
@@ -130,8 +171,9 @@ public class client {
 		
 		packet ack = commons.deserializePacket(dataToDeserialize);
 		int ackno = ack.getSeqNum();
-		acklogbuff.append(ackno + "\n");
 		
+		//writes the logs to the file
+		acklogbuff.append(ackno + "\n");
 		commons.writeFile(seqlog,seqlogbuff.toString());
 		commons.writeFile(acklog,acklogbuff.toString());
 		
